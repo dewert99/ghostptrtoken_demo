@@ -1,0 +1,20 @@
+module Id
+
+  use int.Int
+
+  let rec function id (arg: int) : int
+    requires { arg >= 0}
+    variant {arg}
+    ensures  { arg = 0 -> result = 0 }
+  =
+    if arg = 0 then 0 else id(arg - 1) + 1
+    
+  goal test0: id 0 = 0
+  
+  goal test1: id 1 = 1
+  
+  goal test2: id 2 = 2
+  
+  goal test20: id 20 = 20 (*Takes >5000 steps with Alt-ergo on https://why3.lri.fr/try/*)
+
+end
