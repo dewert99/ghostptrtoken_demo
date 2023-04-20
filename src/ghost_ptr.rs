@@ -162,3 +162,8 @@ pub fn ptr_as_mut<T>(ptr: *const T, t: &mut GhostPtrToken<T>) -> &mut T {
 pub fn ptr_to_box<T>(ptr: *const T, t: &mut GhostPtrToken<T>) -> Box<T> {
     unsafe {Box::from_raw(ptr as *mut _)}
 }
+
+#[trusted]
+#[ensures((@*t).disjoint(@other))]
+#[ensures((@^t) == (@*t).union(@other))]
+pub fn merge<T>(t: &mut GhostPtrToken<T>, other: GhostPtrToken<T>) {}
