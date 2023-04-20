@@ -147,7 +147,7 @@ pub fn ptr_as_mut2<'o, 'i, T>(ptr: *const T, t: &'o mut &'i mut GhostPtrToken<T>
 
 #[requires((@t).contains(ptr))]
 #[ensures(*result == (@*t).lookup(ptr))]
-#[ensures(^result == (@^t).lookup(ptr))]
+#[ensures(@^t == (@*t).insert(ptr, ^result))]
 pub fn ptr_as_mut<T>(ptr: *const T, t: &mut GhostPtrToken<T>) -> &mut T {
     let mut t = t;
     ptr_as_mut2(ptr, &mut t)
