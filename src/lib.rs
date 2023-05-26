@@ -3,7 +3,5 @@
 // #![register_tool(creusot)]
 
 #![allow(dead_code)]
-mod ghost_ptr;
-mod p_map;
-mod helpers;
+#![allow(path_statements)]
 mod linked_list;
