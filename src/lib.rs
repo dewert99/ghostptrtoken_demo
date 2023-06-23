@@ -5,3 +5,4 @@
 #![allow(dead_code)]
 #![allow(path_statements)]
 mod linked_list;
+mod lemmas;

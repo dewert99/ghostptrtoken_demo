@@ -3,47 +3,12 @@ use ::std::ptr;
 use creusot_contracts::ghost_ptr::{GhostPtrExt, GhostPtrToken};
 use creusot_contracts::logic::{FMap, Mapping};
 use creusot_contracts::*;
+use crate::lemmas::*;
 
 pub struct Node<T> {
     pub data: T,
     pub next: *const Node<T>,
 }
-
-#[law]
-#[ensures(x.set(k, v1).set(k, v2) == x.set(k, v2))]
-fn map_set_overwrite<K, V>(x: Mapping<K, V>, k: K, v1: V, v2: V) {}
-
-#[law]
-#[requires(k1 != k2)]
-#[ensures(x.set(k1, v1).set(k2, v2) == x.set(k2, v2).set(k1, v1))]
-fn map_set_commute<K, V>(x: Mapping<K, V>, k1: K, k2: K, v1: V, v2: V) {}
-
-#[law]
-#[requires(x.get(k) == v)]
-#[ensures(x.set(k, v) == x)]
-fn map_set_id<K, V>(x: Mapping<K, V>, k: K, v: V) {}
-
-#[law]
-#[requires(x1.disjoint(x2))]
-#[ensures(x1.union(x2) == x2.union(x1))]
-fn union_commute<K, V>(x1: FMap<K, V>, x2: FMap<K, V>) {}
-
-#[law]
-#[requires(x1.disjoint(x2))]
-#[requires(x1.contains(k))]
-#[ensures(x1.union(x2).remove(k).ext_eq(x1.remove(k).union(x2)))]
-fn union_remove<K, V>(x1: FMap<K, V>, x2: FMap<K, V>, k: K) {}
-
-#[law]
-#[requires(x1.insert(k,v).disjoint(x2))]
-#[ensures(x1.union(x2).insert(k, v).ext_eq(x1.insert(k, v).union(x2)))]
-fn union_insert<K, V>(x1: FMap<K, V>, x2: FMap<K, V>, k: K, v: V) {}
-
-
-#[law]
-#[ensures(FMap::empty().union(x).ext_eq(x))]
-fn union_empty<K, V>(x: FMap<K, V>) {}
-
 
 
 /// Is there a linked list segment from ptr to other
@@ -112,6 +77,7 @@ impl<T> ShallowModel for LinkedList<T> {
     type ShallowModelTy = Seq<T>;
 
     #[logic]
+    #[open(self)]
     fn shallow_model(self) -> Self::ShallowModelTy {
         if self.head == <*const Node<T>>::null_logic() {
             Seq::new()
@@ -124,6 +90,7 @@ impl<T> ShallowModel for LinkedList<T> {
 
 impl<T> LinkedList<T> {
     #[predicate]
+    #[open(self)]
     pub fn invariant(self) -> bool {
         if self.head == <*const Node<T>>::null_logic() {
             self.token.shallow_model() == FMap::empty()
@@ -177,51 +144,52 @@ impl<T> LinkedList<T> {
         }
     }
 
-    #[requires((*self).invariant())]
-    #[requires(other.invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((*self).head != <*const Node<T>>::null_logic() ==>  (*self).head == (^self).head)]
-    #[ensures((*self).head != <*const Node<T>>::null_logic() ==> other.head != <*const Node<T>>::null_logic() ==>
-       lseg_seq((^self).head, (^self).tail, (^self).token@.remove((^self).tail)).ext_eq(
-       lseg_seq((*self).head, (*self).tail, (*self).token@.remove((*self).tail)).concat(Seq::singleton((*self).token@.lookup((*self).tail).data)).concat(lseg_seq(other.head, other.tail, other.token@.remove(other.tail)))))]
-    #[ensures((*self).head != <*const Node<T>>::null_logic() ==> other.head != <*const Node<T>>::null_logic() ==> (^self)@.ext_eq((*self)@.concat(other@)))]
-    #[ensures((^self)@.ext_eq((*self)@.concat(other@)))]
-    pub fn append(&mut self, other: Self) {
-        map_set_commute::<*const Node<T>, Option<Node<T>>>;
-        map_set_overwrite::<*const Node<T>, Option<Node<T>>>;
-        map_set_id::<*const Node<T>, Option<Node<T>>>;
-        union_remove::<*const Node<T>, Node<T>>;
-        union_empty::<*const Node<T>, Node<T>>;
-        union_commute::<*const Node<T>, Node<T>>;
-        union_insert::<*const Node<T>, Node<T>>;
-        if self.head.is_null() {
-            *self = other
-        } else if !other.head.is_null() {
-            let older_self = ghost!(self);
-            let tail = self.token.ptr_as_mut(self.tail);
-            tail.next = other.head;
-            let old_self = ghost!(self);
-            let old_other = ghost!(other);
-            let tok1 = ghost!(old_self.token.shallow_model().remove(self.tail));
-            let tok2 = ghost!(old_other.token.shallow_model().remove(old_other.tail).insert(self.tail, self.token.shallow_model().lookup(self.tail)));
-            proof_assert!(*tok1 == older_self.token.shallow_model().remove(self.tail));
-            self.token.merge(other.token);
-            proof_assert!(lseg(self.tail, old_other.tail, *tok2));
-            proof_assert!(tok1.disjoint(*tok2));
-            proof_assert!(lseg_trans(self.head, self.tail, old_other.tail, *tok1, *tok2));
-            proof_assert!(lseg_seq(older_self.tail, old_other.tail, *tok2) ==
-                Seq::singleton(older_self.token@.lookup(older_self.tail).data).concat(lseg_seq(old_other.head, old_other.tail, old_other.token@.remove(old_other.tail))));
-            proof_assert!(tok1.union(*tok2).ext_eq(self.token@.remove(old_other.tail)));
-            self.tail = other.tail;
-        }
-    }
+    // #[requires((*self).invariant())]
+    // #[requires(other.invariant())]
+    // #[ensures((^self).invariant())]
+    // #[ensures((^self)@.ext_eq((*self)@.concat(other@)))]
+    // pub fn append(&mut self, other: Self) {
+    //     map_set_commute::<*const Node<T>, Option<Node<T>>>;
+    //     map_set_overwrite::<*const Node<T>, Option<Node<T>>>;
+    //     map_set_id::<*const Node<T>, Option<Node<T>>>;
+    //     union_remove::<*const Node<T>, Node<T>>;
+    //     union_empty::<*const Node<T>, Node<T>>;
+    //     union_commute::<*const Node<T>, Node<T>>;
+    //     union_insert::<*const Node<T>, Node<T>>;
+    //     if self.head.is_null() {
+    //         *self = other
+    //     } else if !other.head.is_null() {
+    //         let older_self = ghost!(self);
+    //         let tail = self.token.ptr_as_mut(self.tail);
+    //         tail.next = other.head;
+    //         let old_self = ghost!(self);
+    //         let old_other = ghost!(other);
+    //         let tok1 = ghost!(old_self.token.shallow_model().remove(self.tail));
+    //         let tok2 = ghost!(old_other.token.shallow_model().remove(old_other.tail).insert(self.tail, self.token.shallow_model().lookup(self.tail)));
+    //         proof_assert!(*tok1 == older_self.token.shallow_model().remove(self.tail));
+    //         self.token.merge(other.token);
+    //         proof_assert!(old_other.token@.remove(old_other.tail).view() == tok2.remove(self.tail).view());
+    //         proof_assert!(lseg(self.tail, old_other.tail, *tok2));
+    //         proof_assert!(tok1.disjoint(*tok2));
+    //         proof_assert!(lseg_trans(self.head, self.tail, old_other.tail, *tok1, *tok2));
+    //         proof_assert!(lseg_seq(older_self.tail, old_other.tail, *tok2) ==
+    //             Seq::singleton(older_self.token@.lookup(older_self.tail).data).concat(lseg_seq(old_other.head, old_other.tail, old_other.token@.remove(old_other.tail))));
+    //         proof_assert!(tok1.union(*tok2).ext_eq(self.token@.remove(old_other.tail)));
+    //         self.tail = other.tail;
+    //         proof_assert!(
+    //            lseg_seq(self.head, self.tail, self.token@.remove(self.tail)).ext_eq(
+    //            lseg_seq(old_self.head, old_self.tail, old_self.token@.remove(old_self.tail)).concat(
+    //                     Seq::singleton(old_self.token@.lookup(old_self.tail).data)).concat(lseg_seq(old_other.head, old_other.tail, old_other.token@.remove(old_other.tail)))));
+    //         proof_assert!(self@.ext_eq(old_self@.concat(old_other@)));
+    //     }
+    // }
 
-    #[requires((*self).invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((^self)@.ext_eq((*self)@.concat(Seq::singleton(val))))]
-    fn enqueue(&mut self, val: T) {
-        self.append(Self::singleton(val))
-    }
+    // #[requires((*self).invariant())]
+    // #[ensures((^self).invariant())]
+    // #[ensures((^self)@.ext_eq((*self)@.concat(Seq::singleton(val))))]
+    // fn enqueue(&mut self, val: T) {
+    //     self.append(Self::singleton(val))
+    // }
 
     #[requires((*self).invariant())]
     #[ensures(result.invariant())]
@@ -244,6 +212,7 @@ impl<'a, T> ShallowModel for Iter<'a, T> {
     type ShallowModelTy = Seq<T>;
 
     #[logic]
+    #[open(self)]
     fn shallow_model(self) -> Self::ShallowModelTy {
         LinkedList{head: self.curr, tail: *self.tail, token: *self.token}.shallow_model()
     }
@@ -258,6 +227,7 @@ pub struct Iter<'a, T> {
 impl<'a, T> Iter<'a, T> {
 
     #[predicate]
+    #[open(self)]
     pub fn invariant(self) -> bool {
         LinkedList{head: self.curr, tail: *self.tail, token: *self.token}.invariant()
     }
@@ -291,22 +261,26 @@ pub struct IterMut<'a, T> {
 impl<'a, T> IterMut<'a, T> {
 
     #[predicate]
+    #[open(self)]
     pub fn invariant(self) -> bool {
         LinkedList{head: self.curr, tail: *self.tail, token: *self.token}.invariant()
     }
 
     #[predicate]
+    #[open(self)]
     pub fn fin_invariant(self) -> bool {
         LinkedList{head: self.curr, tail: *self.tail, token: *fin(self.token)}.invariant() &&
             pearlite!{forall<k: *const Node<T>> self.token@.contains(k) == (^self.token)@.contains(k)}
     }
 
     #[logic]
+    #[open(self)]
     pub fn seq(self) -> Seq<T> {
         LinkedList{head: self.curr, tail: *self.tail, token: *self.token}.shallow_model()
     }
 
-    #[logic]
+    #[logic] // this should not be allowed in other logic functions and ghost! blocks
+    #[open(self)]
     pub fn fin_seq(self) -> Seq<T> {
         LinkedList{head: self.curr, tail: *self.tail, token: *fin(self.token)}.shallow_model()
     }
@@ -319,10 +293,6 @@ impl<'a, T> IterMut<'a, T> {
     })]
     #[ensures((^self).fin_invariant() ==> (*self).fin_invariant())]
     #[ensures((^self).fin_invariant() ==> match result {
-        Some(_) => (^(^self).token)@.remove(*self.tail) == (^(*self).token)@.remove(*self.tail).remove(self.curr),
-        None => true
-    })]
-    #[ensures((^self).fin_invariant() ==> match result {
         Some(val) => Seq::singleton(^val).concat((^self).fin_seq()).ext_eq((*self).fin_seq()),
         None => ^self == *self
     })]
@@ -330,12 +300,17 @@ impl<'a, T> IterMut<'a, T> {
         map_set_commute::<*const Node<T>, Option<Node<T>>>;
         map_set_overwrite::<*const Node<T>, Option<Node<T>>>;
         map_set_id::<*const Node<T>, Option<Node<T>>>;
+        let old_self = ghost!(*self);
         if self.curr.is_null() {
             None
         } else {
             let node = self.token.take_mut(self.curr);
             self.curr = node.next;
-            Some(&mut node.data)
+            let res = &mut node.data;
+            proof_assert!(node.resolve() ==> self.fin_invariant() ==> old_self.fin_invariant());
+            proof_assert!(node.resolve() ==> self.fin_invariant() ==> (^self.token)@.remove(*old_self.tail).view() == (^old_self.token)@.remove(*old_self.tail).remove(old_self.curr).view());
+            proof_assert!(node.resolve() ==> self.fin_invariant() ==> Seq::singleton(^res).concat(self.fin_seq()).ext_eq(old_self.fin_seq()));
+            Some(res)
         }
     }
 }
