@@ -62,8 +62,17 @@ pub fn subseq_singleton<T>(s: Seq<T>, i: Int) {
 #[open(self)]
 #[requires(0 <= i && i <= j && j <= k && k <= s.len())]
 #[ensures(s.subsequence(i, j).concat(s.subsequence(j, k)) == s.subsequence(i, k))]
-pub fn subseq_concat<T>(s: Seq<T>, i: Int, j: Int, k: Int) {
+pub fn concat_subseq<T>(s: Seq<T>, i: Int, j: Int, k: Int) {
     s.subsequence(i, k).ext_eq(s.subsequence(i, j).concat(s.subsequence(j, k)));
+}
+
+#[law]
+#[open(self)]
+#[ensures(s1.concat(s2).subsequence(0, s1.len()) == s1)]
+#[ensures(s1.concat(s2).subsequence(s1.len(), s1.len() + s2.len()) == s2)]
+pub fn subseq_concat<T>(s1: Seq<T>, s2: Seq<T>) {
+    s1.ext_eq(s1.concat(s2).subsequence(0, s1.len()));
+    s2.ext_eq(s1.concat(s2).subsequence(s1.len(), s1.len() + s2.len()));
 }
 
 #[law]
