@@ -1,22 +1,25 @@
-use creusot_contracts::__stubs::fin;
-use ::std::ptr;
-use creusot_contracts::ghost_ptr::{GhostPtrExt, GhostPtrToken};
-use creusot_contracts::logic::{FMap, Mapping};
-use creusot_contracts::*;
 use crate::lemmas::*;
+use ::std::ptr;
+use creusot_contracts::__stubs::fin;
+use creusot_contracts::ghost_ptr::{GhostPtrExt, GhostPtrToken};
+use creusot_contracts::logic::FMap;
+use creusot_contracts::*;
 
 pub struct Node<T> {
     pub data: T,
     pub next: *const Node<T>,
 }
 
-
 /// Is there a linked list segment from ptr to other
 #[predicate]
 #[variant(token.len())]
 #[ensures(ptr == other ==> result == (token == FMap::empty()))]
 #[ensures(result && ptr != other ==> token.contains(ptr))]
-fn lseg<T>(ptr: *const Node<T>, other: *const Node<T>, token: FMap<*const Node<T>, Node<T>>) -> bool {
+fn lseg<T>(
+    ptr: *const Node<T>,
+    other: *const Node<T>,
+    token: FMap<*const Node<T>, Node<T>>,
+) -> bool {
     if ptr == other {
         token == FMap::empty()
     } else {
@@ -31,7 +34,11 @@ fn lseg<T>(ptr: *const Node<T>, other: *const Node<T>, token: FMap<*const Node<T
 #[variant(token.len())]
 #[requires(lseg(ptr, other, token))]
 #[ensures(ptr == other ==> result == Seq::new())]
-fn lseg_seq<T>(ptr: *const Node<T>, other: *const Node<T>, token: FMap<*const Node<T>, Node<T>>) -> Seq<T> {
+fn lseg_seq<T>(
+    ptr: *const Node<T>,
+    other: *const Node<T>,
+    token: FMap<*const Node<T>, Node<T>>,
+) -> Seq<T> {
     if ptr == other {
         Seq::new()
     } else {
@@ -82,8 +89,14 @@ impl<T> ShallowModel for LinkedList<T> {
         if self.head == <*const Node<T>>::null_logic() {
             Seq::new()
         } else {
-            lseg_seq(self.head, self.tail, self.token.shallow_model().remove(self.tail))
-                .concat(Seq::singleton(self.token.shallow_model().lookup(self.tail).data))
+            lseg_seq(
+                self.head,
+                self.tail,
+                self.token.shallow_model().remove(self.tail),
+            )
+            .concat(Seq::singleton(
+                self.token.shallow_model().lookup(self.tail).data,
+            ))
         }
     }
 }
@@ -95,10 +108,13 @@ impl<T> LinkedList<T> {
         if self.head == <*const Node<T>>::null_logic() {
             self.token.shallow_model() == FMap::empty()
         } else {
-            lseg(self.head, self.tail, self.token.shallow_model().remove(self.tail))
-                && (match self.token.shallow_model().get(self.tail) {
+            lseg(
+                self.head,
+                self.tail,
+                self.token.shallow_model().remove(self.tail),
+            ) && (match self.token.shallow_model().get(self.tail) {
                 None => false,
-                Some(node) => node.next == <*const Node<T>>::null_logic()
+                Some(node) => node.next == <*const Node<T>>::null_logic(),
             })
         }
     }
@@ -118,12 +134,15 @@ impl<T> LinkedList<T> {
     pub fn singleton(v: T) -> Self {
         map_set_commute::<*const Node<T>, Option<Node<T>>>;
         let mut token = GhostPtrToken::new();
-        let node = Box::new(Node{data:v, next: ptr::null()});
+        let node = Box::new(Node {
+            data: v,
+            next: ptr::null(),
+        });
         let ptr = token.ptr_from_box(node);
         LinkedList {
             head: ptr,
             tail: ptr,
-            token
+            token,
         }
     }
 
@@ -195,7 +214,11 @@ impl<T> LinkedList<T> {
     #[ensures(result.invariant())]
     #[ensures(result@ == self@)]
     pub fn iter(&self) -> Iter<'_, T> {
-        Iter{curr: self.head, token: &self.token, tail: ghost!(self.tail)}
+        Iter {
+            curr: self.head,
+            token: &self.token,
+            tail: ghost!(self.tail),
+        }
     }
 
     #[requires((*self).invariant())]
@@ -204,7 +227,11 @@ impl<T> LinkedList<T> {
     #[ensures(result.fin_invariant() ==> (^self).invariant())]
     #[ensures(result.fin_invariant() ==> (^self)@ == result.fin_seq())]
     pub fn iter_mut(&mut self) -> IterMut<'_, T> {
-        IterMut{curr: self.head, token: &mut self.token, tail: ghost!(self.tail)}
+        IterMut {
+            curr: self.head,
+            token: &mut self.token,
+            tail: ghost!(self.tail),
+        }
     }
 }
 
@@ -214,7 +241,12 @@ impl<'a, T> ShallowModel for Iter<'a, T> {
     #[logic]
     #[open(self)]
     fn shallow_model(self) -> Self::ShallowModelTy {
-        LinkedList{head: self.curr, tail: *self.tail, token: *self.token}.shallow_model()
+        LinkedList {
+            head: self.curr,
+            tail: *self.tail,
+            token: *self.token,
+        }
+        .shallow_model()
     }
 }
 
@@ -225,11 +257,15 @@ pub struct Iter<'a, T> {
 }
 
 impl<'a, T> Iter<'a, T> {
-
     #[predicate]
     #[open(self)]
     pub fn invariant(self) -> bool {
-        LinkedList{head: self.curr, tail: *self.tail, token: *self.token}.invariant()
+        LinkedList {
+            head: self.curr,
+            tail: *self.tail,
+            token: *self.token,
+        }
+        .invariant()
     }
 
     #[requires((*self).invariant())]
@@ -244,13 +280,14 @@ impl<'a, T> Iter<'a, T> {
             None
         } else {
             let node = self.token.ptr_as_ref(self.curr);
-            self.token = self.token.shrink_token_ref(ghost!((self.token.shallow_model()).remove(self.curr)));
+            self.token = self
+                .token
+                .shrink_token_ref(ghost!((self.token.shallow_model()).remove(self.curr)));
             self.curr = node.next;
             Some(&node.data)
         }
     }
 }
-
 
 pub struct IterMut<'a, T> {
     curr: *const Node<T>,
@@ -259,30 +296,49 @@ pub struct IterMut<'a, T> {
 }
 
 impl<'a, T> IterMut<'a, T> {
-
     #[predicate]
     #[open(self)]
     pub fn invariant(self) -> bool {
-        LinkedList{head: self.curr, tail: *self.tail, token: *self.token}.invariant()
+        LinkedList {
+            head: self.curr,
+            tail: *self.tail,
+            token: *self.token,
+        }
+        .invariant()
     }
 
     #[predicate]
     #[open(self)]
     pub fn fin_invariant(self) -> bool {
-        LinkedList{head: self.curr, tail: *self.tail, token: *fin(self.token)}.invariant() &&
-            pearlite!{forall<k: *const Node<T>> self.token@.contains(k) == (^self.token)@.contains(k)}
+        LinkedList {
+            head: self.curr,
+            tail: *self.tail,
+            token: *fin(self.token),
+        }
+        .invariant()
+            && pearlite! {forall<k: *const Node<T>> self.token@.contains(k) == (^self.token)@.contains(k)}
     }
 
     #[logic]
     #[open(self)]
     pub fn seq(self) -> Seq<T> {
-        LinkedList{head: self.curr, tail: *self.tail, token: *self.token}.shallow_model()
+        LinkedList {
+            head: self.curr,
+            tail: *self.tail,
+            token: *self.token,
+        }
+        .shallow_model()
     }
 
     #[logic] // this should not be allowed in other logic functions and ghost! blocks
     #[open(self)]
     pub fn fin_seq(self) -> Seq<T> {
-        LinkedList{head: self.curr, tail: *self.tail, token: *fin(self.token)}.shallow_model()
+        LinkedList {
+            head: self.curr,
+            tail: *self.tail,
+            token: *fin(self.token),
+        }
+        .shallow_model()
     }
 
     #[requires((*self).invariant())]

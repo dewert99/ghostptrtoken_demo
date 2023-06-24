@@ -1,5 +1,5 @@
+use creusot_contracts::logic::{FMap, Int, Mapping, Seq};
 use creusot_contracts::*;
-use creusot_contracts::logic::{Seq, Mapping, Int, FMap};
 
 #[law]
 #[open(self)]
@@ -37,7 +37,6 @@ pub fn union_remove<K, V>(x1: FMap<K, V>, x2: FMap<K, V>, k: K) {}
 #[ensures(x1.union(x2).insert(k, v).ext_eq(x1.insert(k, v).union(x2)))]
 pub fn union_insert<K, V>(x1: FMap<K, V>, x2: FMap<K, V>, k: K, v: V) {}
 
-
 #[law]
 #[open(self)]
 #[ensures(FMap::empty().union(x).ext_eq(x))]
@@ -55,7 +54,7 @@ pub fn subseq_full<T>(s: Seq<T>) {
 #[requires(0 <= i && i < s.len())]
 #[ensures(s.subsequence(i, i+1) == Seq::singleton(s[i]))]
 pub fn subseq_singleton<T>(s: Seq<T>, i: Int) {
-    s.subsequence(i, i+1).ext_eq(Seq::singleton(s[i]));
+    s.subsequence(i, i + 1).ext_eq(Seq::singleton(s[i]));
 }
 
 #[law]
@@ -63,7 +62,8 @@ pub fn subseq_singleton<T>(s: Seq<T>, i: Int) {
 #[requires(0 <= i && i <= j && j <= k && k <= s.len())]
 #[ensures(s.subsequence(i, j).concat(s.subsequence(j, k)) == s.subsequence(i, k))]
 pub fn concat_subseq<T>(s: Seq<T>, i: Int, j: Int, k: Int) {
-    s.subsequence(i, k).ext_eq(s.subsequence(i, j).concat(s.subsequence(j, k)));
+    s.subsequence(i, k)
+        .ext_eq(s.subsequence(i, j).concat(s.subsequence(j, k)));
 }
 
 #[law]
@@ -80,5 +80,6 @@ pub fn subseq_concat<T>(s1: Seq<T>, s2: Seq<T>) {
 #[requires(0 <= i && i <= j && j <= s.len() && 0 <= k && k <= l && i + l <= j)]
 #[ensures(s.subsequence(i, j).subsequence(k, l) == s.subsequence(i + k, i + l))]
 pub fn subseq_subseq<T>(s: Seq<T>, i: Int, j: Int, k: Int, l: Int) {
-    s.subsequence(i + k, i + l).ext_eq(s.subsequence(i, j).subsequence(k, l));
+    s.subsequence(i + k, i + l)
+        .ext_eq(s.subsequence(i, j).subsequence(k, l));
 }

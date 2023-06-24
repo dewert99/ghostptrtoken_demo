@@ -46,6 +46,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ghostptrtoken_demo"
+version = "0.1.0"
+dependencies = [
+ "creusot-contracts",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.141"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -80,9 +87,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.109"
+version = "2.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
+checksum = "a6f671d4b5ffdb8eadec19c0ae67fe2639df8684bd7bc4b83d986b8db549cf01"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -102,13 +109,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55a3fef2a1e3b3a00ce878640918820d3c51081576ac657d23af9fc7928fdb"
 dependencies = [
  "getrandom",
-]
-
-[[package]]
-name = "verify-this"
-version = "0.1.0"
-dependencies = [
- "creusot-contracts",
 ]
 
 [[package]]

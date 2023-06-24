@@ -1,17 +1,17 @@
-use ::std::{mem, iter};
+use super::lazy_allocator::LazyAllocator;
+use ::std::alloc::Allocator;
+use ::std::default::Default;
+use ::std::{iter, mem};
+use creusot_contracts::std::default::Default as CDefault;
+use creusot_contracts::Iterator as _;
 use creusot_contracts::*;
 use iter::Iterator;
-use ::std::default::Default;
-use ::std::alloc::Allocator;
-use creusot_contracts::Iterator as _;
-use creusot_contracts::std::default::Default as CDefault;
-use super::lazy_allocator::LazyAllocator;
 
 const BASE: usize = 8;
 
-struct BumpAllocator<'a, T>{
+struct BumpAllocator<'a, T> {
     allocator: LazyAllocator<'a, [T]>,
-    current: &'a mut [T]
+    current: &'a mut [T],
 }
 
 #[trusted] // This is just the structural resolve Creusot should have inferred
@@ -39,7 +39,6 @@ extern_spec! {
     }
 }
 
-
 impl<'a, T: CDefault> BumpAllocator<'a, T> {
     #[open(self)]
     #[predicate]
@@ -58,7 +57,10 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     #[ensures(result.invariant())]
     #[ensures(result.coinvariant() ==> allocator.coinvariant())]
     pub fn new(allocator: LazyAllocator<'a, [T]>) -> Self {
-        BumpAllocator{allocator, current: Default::default()}
+        BumpAllocator {
+            allocator,
+            current: Default::default(),
+        }
     }
 
     #[requires((*self).invariant())]
@@ -66,15 +68,18 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
     #[ensures(result@.len() == len@)]
     pub fn alloc_default_slice(&mut self, len: usize) -> &'a mut [T] {
-        let mut current = mem::replace(&mut self.current , Default::default());
+        let mut current = mem::replace(&mut self.current, Default::default());
         if current.len() < len {
             let new_size = len.max(shl(BASE, self.allocator.allocations()));
-            let memory: Vec<_> = iter::repeat(()).map_inv(|(), _| T::default()).take(new_size).collect();
+            let memory: Vec<_> = iter::repeat(())
+                .map_inv(|(), _| T::default())
+                .take(new_size)
+                .collect();
             current = self.allocator.accept_box(memory.into_boxed_slice());
         }
         let (res, rest) = current.split_at_mut(len);
         self.current = rest;
-        return res
+        return res;
     }
 
     #[requires((*self).invariant())]
@@ -83,7 +88,7 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     pub fn alloc_default(&mut self) -> &'a mut T {
         match self.alloc_default_slice(1).split_first_mut() {
             Some((x, _)) => x,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
