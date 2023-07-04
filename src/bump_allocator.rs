@@ -5,8 +5,8 @@ use ::std::ops::{Deref, DerefMut};
 use ::std::{iter, mem};
 use creusot_contracts::std::default::Default as CDefault;
 use creusot_contracts::util::unwrap;
-use creusot_contracts::Iterator as _;
-use creusot_contracts::*;
+use creusot_contracts::{extern_spec, Iterator as _};
+use creusot_contracts::prusti_prelude::*;
 use iter::Iterator;
 
 const BASE: usize = 8;
@@ -25,7 +25,7 @@ impl<'a, T> Resolve for BumpAllocator<'a, T> {
     }
 }
 
-#[trusted] // Cruesot doesn't support shl and I also can avoid overflow
+#[trusted] // Cruesot doesn't support shl and it also can avoid overflow
 fn shl(x: usize, y: usize) -> usize {
     x << y
 }
@@ -34,10 +34,19 @@ extern_spec! {
     mod std {
         mod vec {
             impl<T, A: Allocator> Vec<T, A> {
-                #[ensures(result@ == self@)]
+                #[ensures(result@ == old(snap(self@)))]
                 fn into_boxed_slice(self) -> Box<[T], A>;
             }
         }
+    }
+}
+
+impl<'curr, T: CDefault> BumpAllocator<'curr, T> {
+    #[open(self)]
+    #[predicate('a)]
+    #[ensures(at_expiry::<'a>(self.resolve() && self.invariant()) ==> result)]
+    pub fn coinvariant<'a>(self) -> bool {
+        self.allocator.coinvariant()
     }
 }
 
@@ -49,16 +58,9 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
             pearlite!{forall<i: Int> 0 <= i && i < (*self.current)@.len() ==> (*self.current)@[i].is_default()}
     }
 
-    #[open(self)]
-    #[predicate]
-    #[ensures(self.resolve() && self.invariant() ==> result)]
-    pub fn coinvariant(self) -> bool {
-        self.allocator.coinvariant()
-    }
-
     #[requires(allocator.invariant())]
     #[ensures(result.invariant())]
-    #[ensures(result.coinvariant() ==> allocator.coinvariant())]
+    #[after_expiry('a, result.coinvariant() ==> allocator.coinvariant())]
     pub fn new(allocator: LazyAllocator<'a, [T]>) -> Self {
         BumpAllocator {
             allocator,
@@ -67,8 +69,8 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     }
 
     #[requires((*self).invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
+    #[ensures((*self).invariant())]
+    #[after_expiry('a, curr(*self).coinvariant() ==> old(*self).coinvariant())]
     #[ensures(result@.len() == len@)]
     #[ensures(forall<i: Int> 0 <= i && i < len@ ==> (*result)@[i].is_default())]
     pub fn alloc_default_slice(&mut self, len: usize) -> &'a mut [T] {
@@ -76,7 +78,7 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
         if current.len() < len {
             let new_size = len.max(shl(BASE, self.allocator.allocations()));
             let memory: Vec<_> = iter::repeat(())
-                .map_inv(#[ensures(result.is_default())] |(), _| T::default())
+                .map_inv(#[creusot_contracts::ensures(result.is_default())] |(), _| T::default())
                 .take(new_size)
                 .collect();
             current = self.allocator.accept_box(memory.into_boxed_slice());
@@ -87,8 +89,8 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     }
 
     #[requires((*self).invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
+    #[ensures((*self).invariant())]
+    #[after_expiry('a, curr(*self).coinvariant() ==> old(*self).coinvariant())]
     #[ensures((*result).is_default())]
     pub fn alloc_default(&mut self) -> &'a mut T {
         match self.alloc_default_slice(1).split_first_mut() {
@@ -98,9 +100,9 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     }
 
     #[requires((*self).invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
-    #[ensures(*result == val)]
+    #[ensures((*self).invariant())]
+    #[after_expiry('a, curr(*self).coinvariant() ==> old(*self).coinvariant())]
+    #[ensures(*result == old(snap(val)))]
     pub fn alloc(&mut self, val: T) -> &'a mut T {
         let res = self.alloc_default();
         *res = val;
@@ -147,9 +149,9 @@ impl<'a, T> Deref for BumpBox<'a, T> {
 
 impl<'a, T> DerefMut for BumpBox<'a, T> {
     #[requires((*self).invariant())]
-    #[requires((^self).invariant())]
-    #[ensures(^result == (^self).data())]
-    #[ensures(*result == (*self).data())]
+    #[after_expiry((*self).invariant())]
+    #[ensures(*result == old(snap((*self).data())))]
+    #[after_expiry(*result == (*self).data())]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.data.as_mut().unwrap()
     }
@@ -157,10 +159,10 @@ impl<'a, T> DerefMut for BumpBox<'a, T> {
 
 impl<'a, T> BumpAllocator<'a, MaybeUninit<T>> {
     #[requires((*self).invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
+    #[ensures((*self).invariant())]
+    #[after_expiry('a, curr(*self).coinvariant() ==> old(*self).coinvariant())]
     #[ensures(result.invariant())]
-    #[ensures(result.data() == t)]
+    #[ensures(result.data() == old(snap(t)))]
     fn alloc_box(&mut self, t: T) -> BumpBox<'a, T> {
         BumpBox {
             data: self.alloc(Some(t)),

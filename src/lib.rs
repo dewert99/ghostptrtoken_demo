@@ -5,7 +5,7 @@
 // #![register_tool(creusot)]
 #![allow(dead_code)]
 #![allow(path_statements)]
-// mod bump_allocator;
-// mod lazy_allocator;
+mod bump_allocator;
+mod lazy_allocator;
 mod lemmas;
-mod linked_list;
+// mod linked_list;

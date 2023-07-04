@@ -4,7 +4,7 @@ use ::std::iter::Iterator;
 use creusot_contracts::ghost_ptr::GhostPtrToken;
 use creusot_contracts::logic::Mapping;
 use creusot_contracts::util::SizedW;
-use creusot_contracts::*;
+use creusot_contracts::prusti_prelude::*;
 
 type TokenM<T> = <GhostPtrToken<T> as ShallowModel>::ShallowModelTy;
 
@@ -88,6 +88,24 @@ impl<'a, T: ?Sized> Resolve for LazyAllocator<'a, T> {
     }
 }
 
+impl<'curr, T: ?Sized> LazyAllocator<'curr, T> {
+    #[logic(('x) -> 'curr)] // this shouldn't be allowed in ghost! macros or other logic functions
+    #[why3::attr = "inline:trivial"]
+    fn will_add_later<'x>(self) -> Seq<*const T> {
+        pearlite! {(*self.allocated)@.subsequence(at_expiry::<'x>(snap((*self.allocated)@.len())), (*self.allocated)@.len())}
+    }
+
+    #[open(self)]
+    #[predicate('x)]
+    #[ensures(at_expiry::<'x>(self.resolve() && self.invariant()) ==> result)]
+    pub fn coinvariant<'x>(self) -> bool {
+        subseq_full::<*const T>;
+        pearlite! {(*self.allocated)@.len() >= at_expiry::<'x>(snap((*self.allocated)@.len())) &&
+        (*self.allocated)@.subsequence(0, at_expiry::<'x>(snap((*self.allocated)@.len()))).ext_eq(at_expiry::<'x>(snap((*self.allocated)@))) &&
+        alloc_invariant((*self.token)@, self.will_add_later())}
+    }
+}
+
 impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     #[open(self)]
     #[predicate]
@@ -95,25 +113,9 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
         pearlite! {self.token@.view() == Mapping::cst(None)}
     }
 
-    #[logic] // this shouldn't be allowed in ghost! macros or other logic functions
-    #[why3::attr = "inline:trivial"]
-    fn will_add_later(self) -> Seq<*const T> {
-        pearlite! {(^self.allocated)@.subsequence((*self.allocated)@.len(), (^self.allocated)@.len())}
-    }
-
-    #[open(self)]
-    #[predicate]
-    #[ensures(self.resolve() && self.invariant() ==> result)]
-    pub fn coinvariant(self) -> bool {
-        subseq_full::<*const T>;
-        pearlite! {(^self.allocated)@.len() >= (*self.allocated)@.len() &&
-        (^self.allocated)@.subsequence(0, (*self.allocated)@.len()).ext_eq((*self.allocated)@) &&
-        alloc_invariant((^self.token)@, self.will_add_later())}
-    }
-
     #[requires((*x).token@ == TokenM::empty() && (*x).allocated@ == Seq::new())]
     #[ensures(result.invariant())]
-    #[ensures(result.coinvariant() ==> (^x).invariant())]
+    #[after_expiry('a, result.coinvariant() ==> (*x).invariant())]
     fn new(x: &'a mut LazyAllocatorData<T>) -> Self {
         subseq_full::<*const T>;
         LazyAllocator {
@@ -123,9 +125,9 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     }
 
     #[requires((*self).invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (*self).coinvariant())]
-    #[ensures(*result == *memory)]
+    #[ensures((*self).invariant())]
+    #[after_expiry('a, curr(*self).coinvariant() ==> old(*self).coinvariant())]
+    #[ensures(*result == *old(snap(memory)))]
     pub fn accept_box(&mut self, memory: Box<T>) -> &'a mut T {
         subseq_singleton::<*const T>;
         concat_subseq::<*const T>;
@@ -142,9 +144,9 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     }
 
     #[requires((*self).invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (*self).coinvariant())]
-    #[ensures(*result == data)]
+    #[ensures((*self).invariant())]
+    #[after_expiry('a, curr(*self).coinvariant() ==> old(*self).coinvariant())]
+    #[ensures(*result == old(snap(data)))]
     pub fn alloc(&mut self, data: T) -> &'a mut T
     where
         T: Sized,
@@ -157,8 +159,9 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     }
 }
 
-#[requires(forall<x: LazyAllocator<'_, T>> x.invariant() ==> f.precondition((x,)) && (forall<u: U> f.postcondition_once((x,), u) ==> x.coinvariant()))]
-#[ensures(exists<x: LazyAllocator<'_, T>, u: U> x.invariant() && f.postcondition_once((x,), u) && result == u)]
+
+#[creusot_contracts::requires(forall<x: LazyAllocator<'_, T>> x.invariant() ==> f.precondition((x,)) && (forall<u: U> f.postcondition_once((x,), u) ==> x.coinvariant()))]
+#[creusot_contracts::ensures(exists<x: LazyAllocator<'_, T>, u: U> x.invariant() && f.postcondition_once((x,), u) && result == u)]
 pub fn with_lazy_allocator<T, U, F: FnOnce(LazyAllocator<'_, T>) -> U>(f: F) -> U {
     let mut data = LazyAllocatorData {
         token: GhostPtrToken::new(),
