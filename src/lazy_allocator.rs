@@ -1,6 +1,4 @@
 use crate::lemmas::*;
-use ::std::iter::IntoIterator;
-use ::std::iter::Iterator;
 use creusot_contracts::ghost_ptr::GhostPtrToken;
 use creusot_contracts::logic::Mapping;
 use creusot_contracts::util::SizedW;
@@ -26,7 +24,7 @@ fn split_first<T>(s: Seq<T>) -> Option<(T, Seq<T>)> {
     }
 }
 
-struct LazyAllocatorData<T: ?Sized> {
+pub(super) struct LazyAllocatorData<T: ?Sized> {
     token: GhostPtrToken<T>,
     allocated: Vec<*const T>,
 }
@@ -42,35 +40,36 @@ fn alloc_invariant<T: ?Sized>(token: TokenM<T>, allocated: Seq<*const T>) -> boo
 
 impl<T: ?Sized> LazyAllocatorData<T> {
     #[predicate]
-    fn invariant(self) -> bool {
+    #[open(self)]
+    pub(super) fn invariant(self) -> bool {
         pearlite! {alloc_invariant(self.token@, self.allocated@)}
+    }
+
+    #[predicate]
+    #[open(self)]
+    pub(super) fn is_empty(self) -> bool {
+        pearlite! {self.token@ == TokenM::empty() && self.allocated@.ext_eq(Seq::new())}
+    }
+
+    #[ensures(result.is_empty())]
+    #[ensures(result.invariant())]
+    pub(super) fn new() -> Self {
+        LazyAllocatorData {
+            token: GhostPtrToken::new(),
+            allocated: Vec::new(),
+        }
     }
 
     #[requires(self.invariant())]
     // ensures no memory leaks
-    fn drop(self) {
-        drop_h(self.token, self.allocated.into_iter());
-    }
-}
-
-#[requires(alloc_invariant(token@, allocated@))]
-// ensures no memory leaks
-fn drop_h<T: ?Sized>(token: GhostPtrToken<T>, allocated: ::std::vec::IntoIter<*const T>) {
-    subseq_singleton::<*const T>;
-    subseq_concat::<*const T>;
-    concat_subseq::<*const T>;
-    subseq_subseq::<*const T>;
-    map_set_commute::<*const T, Option<SizedW<T>>>;
-    map_set_id::<*const T, Option<SizedW<T>>>;
-    map_set_overwrite::<*const T, Option<SizedW<T>>>;
-    let mut token = token;
-    let mut allocated = allocated;
-    match allocated.next() {
-        None => token.drop(),
-        Some(ptr) => {
+    pub(super) fn drop(self) {
+        subseq_concat::<*const T>;
+        let mut token = self.token;
+        #[invariant(alloc_invariant(token@, iter@))]
+        for ptr in self.allocated {
             let _ = token.ptr_to_box(ptr);
-            drop_h(token, allocated)
         }
+        token.drop();
     }
 }
 
@@ -95,7 +94,7 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
         pearlite! {self.token@.view() == Mapping::cst(None)}
     }
 
-    #[logic] // this shouldn't be allowed in ghost! macros or other logic functions
+    #[logic]
     #[why3::attr = "inline:trivial"]
     fn will_add_later(self) -> Seq<*const T> {
         pearlite! {(^self.allocated)@.subsequence((*self.allocated)@.len(), (^self.allocated)@.len())}
@@ -104,17 +103,17 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     #[open(self)]
     #[predicate]
     #[ensures(self.resolve() && self.invariant() ==> result)]
-    pub fn coinvariant(self) -> bool {
+    pub fn fin_invariant(self) -> bool {
         subseq_full::<*const T>;
         pearlite! {(^self.allocated)@.len() >= (*self.allocated)@.len() &&
         (^self.allocated)@.subsequence(0, (*self.allocated)@.len()).ext_eq((*self.allocated)@) &&
         alloc_invariant((^self.token)@, self.will_add_later())}
     }
 
-    #[requires((*x).token@ == TokenM::empty() && (*x).allocated@ == Seq::new())]
+    #[requires((*x).is_empty())]
     #[ensures(result.invariant())]
-    #[ensures(result.coinvariant() ==> (^x).invariant())]
-    fn new(x: &'a mut LazyAllocatorData<T>) -> Self {
+    #[ensures(result.fin_invariant() ==> (^x).invariant())]
+    pub(super) fn new(x: &'a mut LazyAllocatorData<T>) -> Self {
         subseq_full::<*const T>;
         LazyAllocator {
             token: &mut x.token,
@@ -124,7 +123,7 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
 
     #[requires((*self).invariant())]
     #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (*self).coinvariant())]
+    #[ensures((^self).fin_invariant() ==> (*self).fin_invariant())]
     #[ensures(*result == *memory)]
     pub fn accept_box(&mut self, memory: Box<T>) -> &'a mut T {
         subseq_singleton::<*const T>;
@@ -133,7 +132,7 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
         map_set_commute::<*const T, Option<SizedW<T>>>;
         map_set_id::<*const T, Option<SizedW<T>>>;
         map_set_overwrite::<*const T, Option<SizedW<T>>>;
-        let old_self = ghost!(*self);
+        let old_self = gh!(*self);
         let ptr = self.token.ptr_from_box(memory);
         self.allocated.push(ptr);
         let res = self.token.take_mut(ptr);
@@ -141,29 +140,18 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
         res
     }
 
-    #[requires((*self).invariant())]
-    #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (*self).coinvariant())]
-    #[ensures(*result == data)]
-    pub fn alloc(&mut self, data: T) -> &'a mut T
-    where
-        T: Sized,
-    {
-        self.accept_box(Box::new(data))
-    }
-
     pub fn allocations(&self) -> usize {
         self.allocated.len()
     }
 }
 
-#[requires(forall<x: LazyAllocator<'_, T>> x.invariant() ==> f.precondition((x,)) && (forall<u: U> f.postcondition_once((x,), u) ==> x.coinvariant()))]
-#[ensures(exists<x: LazyAllocator<'_, T>, u: U> x.invariant() && f.postcondition_once((x,), u) && result == u)]
-pub fn with_lazy_allocator<T, U, F: FnOnce(LazyAllocator<'_, T>) -> U>(f: F) -> U {
-    let mut data = LazyAllocatorData {
-        token: GhostPtrToken::new(),
-        allocated: Vec::new(),
-    };
+#[requires(forall<x: LazyAllocator<'_, T>> x.invariant() ==> f.precondition((x,)) && (forall<u: U> f.postcondition_once((x,), u) ==> x.fin_invariant()))]
+#[ensures(exists<x: LazyAllocator<'_, T>> x.invariant() && f.postcondition_once((x,), result))]
+pub fn with_lazy_allocator<T, U, F>(f: F) -> U
+where
+    F: FnOnce(LazyAllocator<'_, T>) -> U,
+{
+    let mut data = LazyAllocatorData::new();
     let allocator = LazyAllocator::new(&mut data);
     let res = f(allocator);
     data.drop();

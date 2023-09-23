@@ -45,20 +45,20 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     #[open(self)]
     #[predicate]
     pub fn invariant(self) -> bool {
-        self.allocator.invariant() &&
-            pearlite!{forall<i: Int> 0 <= i && i < (*self.current)@.len() ==> (*self.current)@[i].is_default()}
+        self.allocator.invariant()
+            && pearlite! {forall<i: Int> 0 <= i && i < (*self.current)@.len() ==> (*self.current)@[i].is_default()}
     }
 
     #[open(self)]
     #[predicate]
     #[ensures(self.resolve() && self.invariant() ==> result)]
-    pub fn coinvariant(self) -> bool {
-        self.allocator.coinvariant()
+    pub fn fin_invariant(self) -> bool {
+        self.allocator.fin_invariant()
     }
 
     #[requires(allocator.invariant())]
     #[ensures(result.invariant())]
-    #[ensures(result.coinvariant() ==> allocator.coinvariant())]
+    #[ensures(result.fin_invariant() ==> allocator.fin_invariant())]
     pub fn new(allocator: LazyAllocator<'a, [T]>) -> Self {
         BumpAllocator {
             allocator,
@@ -68,7 +68,7 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
 
     #[requires((*self).invariant())]
     #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
+    #[ensures((^self).fin_invariant() ==> (^self).fin_invariant())]
     #[ensures(result@.len() == len@)]
     #[ensures(forall<i: Int> 0 <= i && i < len@ ==> (*result)@[i].is_default())]
     pub fn alloc_default_slice(&mut self, len: usize) -> &'a mut [T] {
@@ -76,7 +76,10 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
         if current.len() < len {
             let new_size = len.max(shl(BASE, self.allocator.allocations()));
             let memory: Vec<_> = iter::repeat(())
-                .map_inv(#[ensures(result.is_default())] |(), _| T::default())
+                .map_inv(
+                    #[ensures(result.is_default())]
+                    |(), _| T::default(),
+                )
                 .take(new_size)
                 .collect();
             current = self.allocator.accept_box(memory.into_boxed_slice());
@@ -88,7 +91,7 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
 
     #[requires((*self).invariant())]
     #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
+    #[ensures((^self).fin_invariant() ==> (^self).fin_invariant())]
     #[ensures((*result).is_default())]
     pub fn alloc_default(&mut self) -> &'a mut T {
         match self.alloc_default_slice(1).split_first_mut() {
@@ -99,7 +102,7 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
 
     #[requires((*self).invariant())]
     #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
+    #[ensures((^self).fin_invariant() ==> (^self).fin_invariant())]
     #[ensures(*result == val)]
     pub fn alloc(&mut self, val: T) -> &'a mut T {
         let res = self.alloc_default();
@@ -133,24 +136,18 @@ impl<'a, T> BumpBox<'a, T> {
         let x = self.data;
         drop(x.take().unwrap())
     }
-}
-
-impl<'a, T> Deref for BumpBox<'a, T> {
-    type Target = T;
 
     #[requires((*self).invariant())]
     #[ensures(*result == self.data())]
-    fn deref(&self) -> &Self::Target {
+    fn deref(&self) -> &T {
         self.data.as_ref().unwrap()
     }
-}
 
-impl<'a, T> DerefMut for BumpBox<'a, T> {
     #[requires((*self).invariant())]
     #[requires((^self).invariant())]
     #[ensures(^result == (^self).data())]
     #[ensures(*result == (*self).data())]
-    fn deref_mut(&mut self) -> &mut Self::Target {
+    fn deref_mut(&mut self) -> &mut T {
         self.data.as_mut().unwrap()
     }
 }
@@ -158,7 +155,7 @@ impl<'a, T> DerefMut for BumpBox<'a, T> {
 impl<'a, T> BumpAllocator<'a, MaybeUninit<T>> {
     #[requires((*self).invariant())]
     #[ensures((^self).invariant())]
-    #[ensures((^self).coinvariant() ==> (^self).coinvariant())]
+    #[ensures((^self).fin_invariant() ==> (^self).fin_invariant())]
     #[ensures(result.invariant())]
     #[ensures(result.data() == t)]
     fn alloc_box(&mut self, t: T) -> BumpBox<'a, T> {
