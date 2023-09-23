@@ -9,3 +9,4 @@ mod bump_allocator;
 mod lazy_allocator;
 mod lemmas;
 mod linked_list;
+mod my_box;
