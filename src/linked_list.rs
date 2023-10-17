@@ -32,17 +32,17 @@ fn lseg<T>(
 
 #[ghost]
 #[variant(token.len())]
-#[ensures(ptr == other ==> result == Seq::new())]
+#[ensures(ptr == other ==> result == Seq::EMPTY)]
 fn lseg_seq<T>(
     ptr: *const Node<T>,
     other: *const Node<T>,
     token: FMap<*const Node<T>, Node<T>>,
 ) -> Seq<T> {
     if ptr == other {
-        Seq::new()
+        Seq::EMPTY
     } else {
         match token.get(ptr) {
-            None => Seq::new(),
+            None => Seq::EMPTY,
             Some(node) => {
                 Seq::singleton(node.data).concat(lseg_seq(node.next, other, token.remove(ptr)))
             }
@@ -105,7 +105,7 @@ impl<T> LinkedList<T> {
     #[open(self)]
     pub fn model(self) -> Seq<T> {
         if self.head == <*const Node<T>>::null_logic() {
-            Seq::new()
+            Seq::EMPTY
         } else {
             lseg_seq(
                 self.head,
@@ -119,7 +119,7 @@ impl<T> LinkedList<T> {
     }
 
     #[ensures(result.invariant())]
-    #[ensures(result.model() == Seq::new())]
+    #[ensures(result.model() == Seq::EMPTY)]
     pub fn new() -> Self {
         LinkedList {
             head: ptr::null(),
@@ -149,7 +149,7 @@ impl<T> LinkedList<T> {
     #[ensures((^self).invariant())]
     #[ensures(match result {
         Some(val) => Seq::singleton(val).concat((^self).model()).ext_eq((*self).model()),
-        None => ^self == *self && (*self).model() == Seq::new()
+        None => ^self == *self && (*self).model() == Seq::EMPTY
     })]
     pub fn dequeue(&mut self) -> Option<T> {
         map_set_commute::<*const Node<T>, Option<Node<T>>>;
@@ -167,13 +167,6 @@ impl<T> LinkedList<T> {
     #[ensures((^self).invariant())]
     #[ensures((^self).model().ext_eq((*self).model().concat(other.model())))]
     pub fn append(&mut self, other: Self) {
-        map_set_commute::<*const Node<T>, Option<Node<T>>>;
-        map_set_overwrite::<*const Node<T>, Option<Node<T>>>;
-        map_set_id::<*const Node<T>, Option<Node<T>>>;
-        union_remove::<*const Node<T>, Node<T>>;
-        union_empty::<*const Node<T>, Node<T>>;
-        union_commute::<*const Node<T>, Node<T>>;
-        union_insert::<*const Node<T>, Node<T>>;
         if self.head.is_null() {
             *self = other
         } else if !other.head.is_null() {
@@ -279,7 +272,7 @@ impl<'a, T> Iter<'a, T> {
     #[ensures((^self).invariant())]
     #[ensures(match result {
         Some(val) => Seq::singleton(*val).concat((^self).model()).ext_eq((*self).model()),
-        None => ^self == *self && (*self).model() == Seq::new()
+        None => ^self == *self && (*self).model() == Seq::EMPTY
     })]
     pub fn next(&mut self) -> Option<&'a T> {
         map_set_commute::<*const Node<T>, Option<Node<T>>>;
@@ -362,7 +355,7 @@ impl<'a, T> IterMut<'a, T> {
     #[ensures((^self).invariant())]
     #[ensures(match result {
         Some(val) => Seq::singleton(*val).concat((^self).model()) == (*self).model(),
-        None => ^self == *self && (*self).model() == Seq::new()
+        None => ^self == *self && (*self).model() == Seq::EMPTY
     })]
     #[ensures((^self).fin_invariant() ==> (*self).fin_invariant())]
     #[ensures(match result {
@@ -371,7 +364,6 @@ impl<'a, T> IterMut<'a, T> {
     })]
     pub fn next(&mut self) -> Option<&'a mut T> {
         map_set_commute::<*const Node<T>, Option<Node<T>>>;
-        map_set_overwrite::<*const Node<T>, Option<Node<T>>>;
         map_set_id::<*const Node<T>, Option<Node<T>>>;
         let old_self = gh!(*self);
         if self.curr.is_null() {

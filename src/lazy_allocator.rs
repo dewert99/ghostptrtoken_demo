@@ -6,23 +6,22 @@ use creusot_contracts::*;
 
 type TokenM<T> = <GhostPtrToken<T> as ShallowModel>::ShallowModelTy;
 
-#[logic]
-#[ensures(s.ext_eq(match result {None => Seq::new(), Some((rest, last)) => rest.push(last)}))]
-fn split_last<T>(s: Seq<T>) -> Option<(Seq<T>, T)> {
-    match s.get(s.len() - 1) {
-        None => None,
-        Some(l) => Some((s.subsequence(0, s.len() - 1), l)),
+trait SeqExt {
+
+    #[ghost]
+    #[why3::attr = "inline:trivial"]
+    fn tail2(self) -> Self;
+}
+
+impl<T> SeqExt for Seq<T> {
+    #[ghost]
+    #[open]
+    #[why3::attr = "inline:trivial"]
+    fn tail2(self) -> Self {
+        self.subsequence(1, self.len())
     }
 }
 
-#[logic]
-#[ensures(s.ext_eq(match result {None => Seq::new(), Some((first, rest)) => Seq::singleton(first).concat(rest)}))]
-fn split_first<T>(s: Seq<T>) -> Option<(T, Seq<T>)> {
-    match s.get(0) {
-        None => None,
-        Some(f) => Some((f, s.subsequence(1, s.len()))),
-    }
-}
 
 pub(super) struct LazyAllocatorData<T: ?Sized> {
     token: GhostPtrToken<T>,
@@ -32,9 +31,9 @@ pub(super) struct LazyAllocatorData<T: ?Sized> {
 #[predicate]
 #[variant(allocated.len())]
 fn alloc_invariant<T: ?Sized>(token: TokenM<T>, allocated: Seq<*const T>) -> bool {
-    match split_first(allocated) {
+    match allocated.get(0) {
         None => token == TokenM::empty(),
-        Some((first, rest)) => token.contains(first) && alloc_invariant(token.remove(first), rest),
+        Some(head) => token.contains(head) && alloc_invariant(token.remove(head), allocated.tail2()),
     }
 }
 
@@ -48,7 +47,7 @@ impl<T: ?Sized> LazyAllocatorData<T> {
     #[predicate]
     #[open(self)]
     pub(super) fn is_empty(self) -> bool {
-        pearlite! {self.token@ == TokenM::empty() && self.allocated@.ext_eq(Seq::new())}
+        pearlite! {self.token@ == TokenM::empty() && self.allocated@.ext_eq(Seq::EMPTY)}
     }
 
     #[ensures(result.is_empty())]
@@ -103,8 +102,8 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     #[open(self)]
     #[predicate]
     #[ensures(self.resolve() && self.invariant() ==> result)]
+    #[why3::attr = "inline:trivial"]
     pub fn fin_invariant(self) -> bool {
-        subseq_full::<*const T>;
         pearlite! {(^self.allocated)@.len() >= (*self.allocated)@.len() &&
         (^self.allocated)@.subsequence(0, (*self.allocated)@.len()).ext_eq((*self.allocated)@) &&
         alloc_invariant((^self.token)@, self.will_add_later())}
@@ -126,17 +125,14 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     #[ensures((^self).fin_invariant() ==> (*self).fin_invariant())]
     #[ensures(*result == *memory)]
     pub fn accept_box(&mut self, memory: Box<T>) -> &'a mut T {
-        subseq_singleton::<*const T>;
-        concat_subseq::<*const T>;
-        subseq_subseq::<*const T>;
-        map_set_commute::<*const T, Option<SizedW<T>>>;
-        map_set_id::<*const T, Option<SizedW<T>>>;
-        map_set_overwrite::<*const T, Option<SizedW<T>>>;
         let old_self = gh!(*self);
         let ptr = self.token.ptr_from_box(memory);
         self.allocated.push(ptr);
         let res = self.token.take_mut(ptr);
-        proof_assert!((^old_self.token)@.remove(ptr).view() == (^self.token)@.view());
+        proof_assert!((^old_self.token)@.remove(ptr).ext_eq((^self.token)@));
+        proof_assert!(^self.allocated == ^old_self.allocated);
+        proof_assert!((*self.allocated)@.len() ==(*old_self.allocated)@.len() + 1);
+        proof_assert!((^self.allocated)@.len() >= (*self.allocated)@.len() ==> old_self.will_add_later().tail2().ext_eq(self.will_add_later()));
         res
     }
 
