@@ -288,20 +288,11 @@ impl<'a, T> Iter<'a, T> {
     }
 }
 
+#[derive(Resolve)]
 pub struct IterMut<'a, T> {
     curr: *const Node<T>,
     token: &'a mut GhostPtrToken<Node<T>>,
     tail: Ghost<*const Node<T>>,
-}
-
-// Safety this is just the structural resolve
-#[trusted]
-impl<'a, T> Resolve for IterMut<'a, T> {
-    #[predicate]
-    #[open(self)]
-    fn resolve(self) -> bool {
-        self.curr.resolve() && self.token.resolve() && self.tail.resolve()
-    }
 }
 
 impl<'a, T> IterMut<'a, T> {

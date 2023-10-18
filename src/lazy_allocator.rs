@@ -7,7 +7,6 @@ use creusot_contracts::*;
 type TokenM<T> = <GhostPtrToken<T> as ShallowModel>::ShallowModelTy;
 
 trait SeqExt {
-
     #[ghost]
     #[why3::attr = "inline:trivial"]
     fn tail2(self) -> Self;
@@ -22,7 +21,6 @@ impl<T> SeqExt for Seq<T> {
     }
 }
 
-
 pub(super) struct LazyAllocatorData<T: ?Sized> {
     token: GhostPtrToken<T>,
     allocated: Vec<*const T>,
@@ -33,7 +31,9 @@ pub(super) struct LazyAllocatorData<T: ?Sized> {
 fn alloc_invariant<T: ?Sized>(token: TokenM<T>, allocated: Seq<*const T>) -> bool {
     match allocated.get(0) {
         None => token == TokenM::empty(),
-        Some(head) => token.contains(head) && alloc_invariant(token.remove(head), allocated.tail2()),
+        Some(head) => {
+            token.contains(head) && alloc_invariant(token.remove(head), allocated.tail2())
+        }
     }
 }
 
@@ -72,18 +72,10 @@ impl<T: ?Sized> LazyAllocatorData<T> {
     }
 }
 
+#[derive(Resolve)]
 pub struct LazyAllocator<'a, T: ?Sized> {
     token: &'a mut GhostPtrToken<T>,
     allocated: &'a mut Vec<*const T>,
-}
-
-#[trusted] // This is just the structural resolve Creusot should have inferred
-impl<'a, T: ?Sized> Resolve for LazyAllocator<'a, T> {
-    #[open(self)]
-    #[predicate]
-    fn resolve(self) -> bool {
-        Resolve::resolve(self.token) && Resolve::resolve(self.allocated)
-    }
 }
 
 impl<'a, T: ?Sized> LazyAllocator<'a, T> {
