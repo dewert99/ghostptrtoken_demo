@@ -1,5 +1,5 @@
 use creusot_contracts::ghost_ptr::GhostPtrToken;
-use creusot_contracts::{ensures, ghost, open, predicate, requires, ShallowModel};
+use creusot_contracts::{ensures, open, pearlite, predicate, requires, logic, ShallowModel};
 
 pub(super) struct MyBox<T> {
     ptr: *const T,
@@ -10,11 +10,11 @@ impl<T> MyBox<T> {
     #[open(self)]
     #[predicate]
     pub fn invariant(self) -> bool {
-        self.token.shallow_model().contains(self.ptr) && self.token.shallow_model().len() == 1
+        pearlite!{self.token@.contains(self.ptr) && forall<p: *const T> self.token@.contains(p) ==> p == self.ptr}
     }
 
     #[open(self)]
-    #[ghost]
+    #[logic]
     #[requires(self.invariant())]
     pub fn model(self) -> T {
         self.token.shallow_model().lookup(self.ptr)

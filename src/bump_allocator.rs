@@ -1,7 +1,6 @@
 use super::lazy_allocator::LazyAllocator;
 use ::std::alloc::Allocator;
 use ::std::default::Default;
-use ::std::ops::{Deref, DerefMut};
 use ::std::{iter, mem};
 use creusot_contracts::std::default::Default as CDefault;
 use creusot_contracts::util::unwrap;
@@ -19,7 +18,7 @@ pub struct BumpAllocator<'a, T> {
 #[trusted] // This is just the structural resolve Creusot should have inferred
 impl<'a, T> Resolve for BumpAllocator<'a, T> {
     #[open(self)]
-    #[predicate]
+    #[predicate(prophetic)]
     fn resolve(self) -> bool {
         Resolve::resolve(self.allocator) && Resolve::resolve(self.current)
     }
@@ -43,7 +42,7 @@ extern_spec! {
 
 impl<'a, T: CDefault> BumpAllocator<'a, T> {
     #[open(self)]
-    #[predicate]
+    #[predicate(prophetic)]
     pub fn invariant(self) -> bool {
         self.allocator.invariant()
             && pearlite! {forall<i: Int> 0 <= i && i < (*self.current)@.len() ==> (*self.current)@[i].is_default()}
@@ -94,10 +93,7 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     #[ensures((^self).fin_invariant() ==> (^self).fin_invariant())]
     #[ensures((*result).is_default())]
     pub fn alloc_default(&mut self) -> &'a mut T {
-        match self.alloc_default_slice(1).split_first_mut() {
-            Some((x, _)) => x,
-            _ => unreachable!(),
-        }
+        &mut self.alloc_default_slice(1)[0]
     }
 
     #[requires((*self).invariant())]
@@ -120,7 +116,7 @@ struct BumpBox<'a, T> {
 
 impl<'a, T> BumpBox<'a, T> {
     #[open(self)]
-    #[logic]
+    #[predicate]
     pub fn invariant(self) -> bool {
         *self.data != None
     }
