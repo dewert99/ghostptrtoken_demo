@@ -49,7 +49,7 @@ impl<'a, T: CDefault> BumpAllocator<'a, T> {
     }
 
     #[open(self)]
-    #[predicate]
+    #[predicate(prophetic)]
     #[ensures(self.resolve() && self.invariant() ==> result)]
     pub fn fin_invariant(self) -> bool {
         self.allocator.fin_invariant()

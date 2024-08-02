@@ -1,4 +1,3 @@
-use crate::lemmas::*;
 use creusot_contracts::ghost_ptr::*;
 use creusot_contracts::logic::Mapping;
 use creusot_contracts::*;
@@ -46,7 +45,6 @@ impl<T: ?Sized> LazyAllocatorData<T> {
     #[requires(self.invariant())]
     // ensures no memory leaks
     pub(super) fn drop(self) {
-        subseq_concat::<*const T>;
         let mut token = self.token;
         #[invariant(alloc_invariant(token@, iter@))]
         for ptr in self.allocated {
@@ -76,7 +74,7 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     }
 
     #[open(self)]
-    #[predicate]
+    #[predicate(prophetic)]
     #[ensures(self.resolve() && self.invariant() ==> result)]
     pub fn fin_invariant(self) -> bool {
         pearlite! {(^self.allocated)@.len() >= (*self.allocated)@.len() &&
@@ -90,7 +88,7 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     #[ensures(result.fin_invariant() ==> (^x).invariant())]
     pub(super) fn new(x: &'a mut LazyAllocatorData<T>) -> Self {
         LazyAllocator {
-            token: &mut x.token,
+            token: x.token.borrow_mut(),
             allocated: &mut x.allocated,
         }
     }
@@ -123,7 +121,7 @@ where
     F: FnOnce(LazyAllocator<'_, T>) -> U,
 {
     let mut data = LazyAllocatorData::new();
-    let allocator = LazyAllocator::new(data.borrow_mut());
+    let allocator = LazyAllocator::new(&mut data);
     let res = f(allocator);
     data.drop();
     res
