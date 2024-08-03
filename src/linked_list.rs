@@ -65,8 +65,6 @@ fn lseg_trans<T>(
     token12: FMap<*const Node<T>, Node<T>>,
     token23: FMap<*const Node<T>, Node<T>>,
 ) -> bool {
-    // union_remove::<*const Node<T>, Node<T>>;
-    // union_empty::<*const Node<T>, Node<T>>;
     if ptr1 != ptr2 {
         let next = token12.lookup(ptr1).next;
         lseg_trans(next, ptr2, ptr3, token12.remove(ptr1), token23)
@@ -137,7 +135,6 @@ impl<T> LinkedList<T> {
     #[ensures(result.invariant())]
     #[ensures(result.model().ext_eq(Seq::singleton(v)))]
     pub fn singleton(v: T) -> Self {
-        // map_set_commute::<*const Node<T>, Option<Node<T>>>;
         let mut token = GhostPtrToken::new();
         let node = Node {
             data: v,
@@ -158,7 +155,6 @@ impl<T> LinkedList<T> {
         None => ^self == *self && (*self).model() == Seq::EMPTY
     })]
     pub fn dequeue(&mut self) -> Option<T> {
-        // map_set_commute::<*const Node<T>, Option<Node<T>>>;
         if self.head.is_null() {
             None
         } else {
@@ -172,7 +168,6 @@ impl<T> LinkedList<T> {
     #[requires(other.invariant())]
     #[ensures((^self).invariant())]
     #[ensures((^self).model().ext_eq((*self).model().concat(other.model())))]
-    #[ensures(false)]
     pub fn append(&mut self, other: Self) {
         if self.head.is_null() {
             *self = other
@@ -188,11 +183,7 @@ impl<T> LinkedList<T> {
                 .shallow_model()
                 .remove(old_other.tail)
                 .insert(self.tail, self.token.shallow_model().lookup(self.tail)));
-            // proof_assert!(tok1.view() == older_self.token.shallow_model().remove(self.tail).view());
             self.token.merge(other.token);
-            // proof_assert!(old_other.token@.remove(old_other.tail).view() == tok2.remove(self.tail).view());
-            // proof_assert!(lseg(self.tail, old_other.tail, *tok2));
-            // proof_assert!(tok1.disjoint(*tok2));
             proof_assert!(lseg_trans(
                 self.head,
                 self.tail,
@@ -200,7 +191,6 @@ impl<T> LinkedList<T> {
                 *tok1,
                 *tok2
             ));
-            // proof_assert!(tok1.union(*tok2).ext_eq(self.token@.remove(old_other.tail)));
             self.tail = other.tail;
             proof_assert!(self
                 .model()
