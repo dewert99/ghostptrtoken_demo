@@ -1,0 +1,9 @@
+import "z3_no_poly.drv"
+
+theory BuiltIn
+
+  meta "get_counterexmp" ""
+  meta "meta_incremental" ""
+  meta "supports_smtlib_minimize" ""
+
+end
