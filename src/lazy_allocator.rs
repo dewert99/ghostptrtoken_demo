@@ -78,7 +78,7 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     #[ensures(self.resolve() && self.invariant() ==> result)]
     pub fn fin_invariant(self) -> bool {
         pearlite! {(^self.allocated)@.len() >= (*self.allocated)@.len() &&
-        (forall<i: Int> 0 <= i && i < (*self.allocated)@.len() ==> (^self.allocated)@[i] == (*self.allocated)@[i]) &&
+            (^self.allocated)@.subsequence(0, (*self.allocated)@.len()).ext_eq((*self.allocated)@) &&
         alloc_invariant(self.token.fin(), self.will_add_later())}
     }
 
@@ -98,14 +98,9 @@ impl<'a, T: ?Sized> LazyAllocator<'a, T> {
     #[ensures((^self).fin_invariant() ==> (*self).fin_invariant())]
     #[ensures(*result == *memory)]
     pub fn accept_box(&mut self, memory: Box<T>) -> &'a mut T {
-        let old_self = snapshot!(*self);
         let ptr = self.token.ptr_from_box(memory);
         self.allocated.push(ptr);
         let res = self.token.take_mut(ptr);
-        proof_assert!(old_self.token.fin().remove(ptr).ext_eq(self.token.fin()));
-        proof_assert!(^self.allocated == ^old_self.allocated);
-        proof_assert!((*self.allocated)@.len() ==(*old_self.allocated)@.len() + 1);
-        proof_assert!((^self.allocated)@.len() >= (*self.allocated)@.len() ==> old_self.will_add_later().tail().ext_eq(self.will_add_later()));
         res
     }
 

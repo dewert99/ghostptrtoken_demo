@@ -172,7 +172,6 @@ impl<T> LinkedList<T> {
         if self.head.is_null() {
             *self = other
         } else if !other.head.is_null() {
-            let older_self = snapshot!(self);
             let tail = self.token.ptr_as_mut(self.tail);
             tail.next = other.head;
             let old_self = snapshot!(self);
