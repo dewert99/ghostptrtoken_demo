@@ -174,26 +174,16 @@ impl<T> LinkedList<T> {
         } else if !other.head.is_null() {
             let tail = self.token.ptr_as_mut(self.tail);
             tail.next = other.head;
-            let old_self = snapshot!(self);
-            let old_other = snapshot!(other);
-            let tok1 = snapshot!(old_self.token.shallow_model().remove(self.tail));
-            let tok2 = snapshot!(old_other
-                .token
-                .shallow_model()
-                .remove(old_other.tail)
-                .insert(self.tail, self.token.shallow_model().lookup(self.tail)));
+            let tok1 = snapshot!(self.token@.remove(self.tail));
+            let tok2 = snapshot!(
+                other
+                    .token@
+                    .remove(other.tail)
+                    .insert(self.tail, self.token@.lookup(self.tail))C
+            );
             self.token.merge(other.token);
-            proof_assert!(lseg_trans(
-                self.head,
-                self.tail,
-                old_other.tail,
-                *tok1,
-                *tok2
-            ));
+            proof_assert!(lseg_trans(self.head, self.tail, other.tail, *tok1, *tok2));
             self.tail = other.tail;
-            proof_assert!(self
-                .model()
-                .ext_eq(old_self.model().concat(old_other.model())));
         }
     }
 
