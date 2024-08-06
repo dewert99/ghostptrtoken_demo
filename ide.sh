@@ -1,2 +1,1 @@
-cargo creusot --output-file why3.mlcfg
-why3 --extra-config why3conf/no_mbqi.conf ide why3.mlcfg -L ../creusot/prelude/  $@
+cargo creusot --simple-triggers true why3 ide " --extra-config why3conf/no_mbqi.conf"

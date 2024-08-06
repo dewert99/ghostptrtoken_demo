@@ -6,4 +6,4 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-creusot-contracts = {path = "../creusot/creusot-contracts"}
+creusot-contracts = {git = "https://github.com/dewert99/creusot", branch = "monomorphize", features = ["extensional_seq"]}
