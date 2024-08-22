@@ -179,7 +179,7 @@ impl<T> LinkedList<T> {
                 other
                     .token@
                     .remove(other.tail)
-                    .insert(self.tail, self.token@.lookup(self.tail))C
+                    .insert(self.tail, self.token@.lookup(self.tail))
             );
             self.token.merge(other.token);
             proof_assert!(lseg_trans(self.head, self.tail, other.tail, *tok1, *tok2));
